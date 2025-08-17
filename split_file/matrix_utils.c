@@ -22,9 +22,9 @@ void free_matrix(Matrix *m) {
 	}
 }	
 
-void int_random_matrix(Matrix *m){
-	for (int i = 0; i < m->rows; i++) {
-		m->data[i] = (double)rand() / RAND_MAX * 2.0-1.0; // Random values between -1.0 and 1.0
+void init_random_matrix(Matrix *m){
+	for (int i = 0; i < m->rows * m->cols; i++) {
+	    m->data[i] = (double)rand() / RAND_MAX * 2.0 - 1.0;
 	}
 }
 

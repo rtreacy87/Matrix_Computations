@@ -5,6 +5,8 @@
 #include "matrix_utils.h"
 #include "matmul_basic.h"
 #include "matmul_optimized.h"
+#include "performance.h"
+#include "verification.h"
 
 int main(int argc, char *argv[]) {
     // Default parameters
