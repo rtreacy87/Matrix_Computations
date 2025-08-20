@@ -25,7 +25,7 @@ void process_matrix_row(Matrix *C, Matrix *A, Matrix *B, int row_i) {
 }
 
 // Level 3 BLAS: Matrix-matrix operations (top level)
-void matmul_ikj_inline(Matrix *C, Matrix *A, Matrix *B) {
+void matmul_ikj_inlined(Matrix *C, Matrix *A, Matrix *B) {
     // Main function with simple single loop (calls process_matrix_row)
     for (int i = 0; i < A->rows; i++) {
         process_matrix_row(C, A, B, i);  // Call Level 2 function
