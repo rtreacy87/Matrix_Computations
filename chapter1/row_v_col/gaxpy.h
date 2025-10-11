@@ -30,6 +30,12 @@ public:
     }
 };
 
+struct BenchmarkConfig {
+    const Matrix& A;
+    const std::vector<double>& x;
+    int iterations;
+};
+
 // Function declarations for different gaxpy implementations
 // y = y + A*x
 

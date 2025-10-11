@@ -24,26 +24,24 @@ public:
 
 // Test harness - measures performance of a gaxpy implementation
 double benchmark_gaxpy(void (*gaxpy_func)(const Matrix&, const std::vector<double>&, std::vector<double>&),
-                       const Matrix& A, 
-                       const std::vector<double>& x, 
-                       std::vector<double>& y,
-                       int iterations) {
+                       const BenchmarkConfig& config, 
+                       std::vector<double>& y) {
     Timer timer;
     
     // Warm-up run
-    gaxpy_func(A, x, y);
+    gaxpy_func(config.A, config.x, y);
     
     // Reset y
     std::fill(y.begin(), y.end(), 0.0);
     
     // Timed runs
     timer.start();
-    for (int iter = 0; iter < iterations; iter++) {
-        gaxpy_func(A, x, y);
+    for (int iter = 0; iter < config.iterations; iter++) {
+        gaxpy_func(config.A, config.x, y);
     }
     double total_time = timer.elapsed_ms();
     
-    return total_time / iterations;  // Average time per iteration
+    return total_time / config.iterations;  // Average time per iteration
 }
 
 int main() {
@@ -59,7 +57,7 @@ int main() {
     int iterations = 100;  // Number of iterations for averaging
     
     std::cout << std::fixed << std::setprecision(4);
-    std::cout << "Gaxpy Performance Comparison (C++ Row-Major Storage)\n";
+    std::cout << "Performance Comparison\n";
     std::cout << "====================================================\n\n";
     
     for (auto [m, n] : sizes) {
@@ -71,7 +69,7 @@ int main() {
         A.fill_random();
         
         std::vector<double> x(n);
-        std::vector<double> y_row(m, 0.0);
+        std::vector<double> y_row(m, 0.0); 
         std::vector<double> y_col(m, 0.0);
         
         // Fill x with random values
@@ -81,12 +79,14 @@ int main() {
         for (auto& val : x) {
             val = dis(gen);
         }
-        
+
+        BenchmarkConfig config = {A, x, iterations};
+
         // Benchmark row-oriented
-        double time_row = benchmark_gaxpy(gaxpy_row_oriented, A, x, y_row, iterations);
+        double time_row = benchmark_gaxpy(gaxpy_row_oriented, config, y_row);
         
         // Benchmark column-oriented
-        double time_col = benchmark_gaxpy(gaxpy_column_oriented, A, x, y_col, iterations);
+        double time_col = benchmark_gaxpy(gaxpy_column_oriented, config, y_col);
         
         // Calculate speedup
         double speedup = time_col / time_row;
@@ -109,9 +109,6 @@ int main() {
         // double time_new = benchmark_gaxpy(gaxpy_blocked, A, x, y_new, iterations);
         // std::cout << "  Blocked version: " << std::setw(10) << time_new << " ms\n";
     }
-    
-    std::cout << "Note: In C++, matrices are stored in row-major order,\n";
-    std::cout << "so row-oriented access should be faster due to better cache locality.\n";
     
     return 0;
 }

@@ -16,18 +16,20 @@ You'll discover that column-oriented code is often faster for small matrices, wh
 
 ## Project Structure
 
-The framework is split into three files for easy experimentation:
+The framework is split into four files for easy experimentation:
 
 ```
 your_project/
 ├── gaxpy.h          # Matrix class and function declarations
 ├── gaxpy.cpp        # Your gaxpy implementations (add new ones here!)
-└── main.cpp         # Timer and benchmarking framework
+├── main.cpp         # Timer and benchmarking framework
+└── test_gaxpy.cpp   # Test suite for correctness verification
 ```
 
 **Benefits of this structure:**
 - **gaxpy.cpp** contains only implementations - easy to add and modify
-- **main.cpp** contains the testing framework - rarely needs changes
+- **main.cpp** contains the performance testing framework
+- **test_gaxpy.cpp** contains correctness tests - run before benchmarking!
 - **gaxpy.h** defines the interface - add declarations when you add new implementations
 
 ## Quick Start
@@ -54,12 +56,83 @@ g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
 ./gaxpy_test
 ```
 
+## Testing for Correctness
+
+Before benchmarking, always verify your implementations are correct!
+
+### Running the Test Suite
+
+```bash
+# Compile the test suite
+g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
+
+# Run tests
+./test_gaxpy
+```
+
+**Expected output:**
+```
+========================================
+Gaxpy Implementation Test Suite
+========================================
+
+[Test: Matrix Class]
+  ✓ Matrix dimensions correct
+  ✓ Matrix data size correct
+  ✓ Element (0,0) access
+  ...
+
+[Test: Known Values]
+  ✓ Row-oriented: 2x2 known values
+  ✓ Column-oriented: 2x2 known values
+
+[Test: Implementation Equivalence]
+  ✓ Equivalence for 1x1
+  ✓ Equivalence for 5x5
+  ...
+
+========================================
+Test Summary
+========================================
+Passed: 42
+Failed: 0
+Total:  42
+
+✓ All tests passed!
+```
+
+### What the Test Suite Checks
+
+1. **Matrix Class** - Basic functionality (construction, element access, random fill)
+2. **Known Values** - Results match hand-calculated expected values
+3. **Implementation Equivalence** - All implementations produce identical results
+4. **Edge Cases** - Empty matrices, single row/column, zero values
+5. **Accumulation** - Correctly handles non-zero initial y values (y += Ax)
+6. **Identity Matrix** - I*x = x for all implementations
+
+### Workflow: Test First, Then Benchmark
+
+```bash
+# 1. Write your new implementation in gaxpy.cpp
+# 2. Add declaration to gaxpy.h
+# 3. Test for correctness
+g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
+./test_gaxpy
+
+# 4. If tests pass, benchmark performance
+g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
+./gaxpy_test
+```
+
+**Why test first?** A fast but incorrect implementation is useless! Always verify correctness before worrying about performance.
+
 ## Framework Components
 
 ### File: gaxpy.h (Header)
 
 This file contains:
 - **Matrix class definition** with row-major storage
+- **BenchmarkConfig struct** for grouping shared test parameters
 - **Function declarations** for all gaxpy implementations
 
 **You edit this when:** Adding a new gaxpy implementation (add its declaration)
@@ -78,6 +151,7 @@ This file contains all gaxpy implementations. **This is where you'll spend most 
 
 This file contains:
 - **Timer class** for accurate measurements
+- **BenchmarkConfig struct** to group shared test parameters
 - **benchmark_gaxpy()** function for testing
 - **main()** function that runs all tests
 
@@ -131,6 +205,44 @@ double time = timer.elapsed_ms();
 std::cout << "Elapsed: " << time << " ms\n";
 ```
 
+### BenchmarkConfig Struct (gaxpy.h)
+
+```cpp
+struct BenchmarkConfig {
+    const Matrix& A;
+    const std::vector<double>& x;
+    int iterations;
+};
+```
+
+**Purpose:** Groups shared test parameters that remain constant across all implementations being compared.
+
+**Design rationale:** Separates immutable inputs (A, x, iterations) from mutable outputs (y). This ensures all implementations are tested with identical inputs while allowing each to have its own output vector for verification.
+
+**Fields:**
+- `A`: The matrix to multiply (shared across all tests)
+- `x`: The input vector (shared across all tests)
+- `iterations`: Number of times to run for averaging (shared across all tests)
+
+**Usage example:**
+```cpp
+Matrix A(100, 100);
+A.fill_random();
+std::vector<double> x(100);
+// ... fill x ...
+
+// Create config once
+BenchmarkConfig config = {A, x, 100};
+
+// Each implementation gets its own output vector
+std::vector<double> y_row(100, 0.0);
+std::vector<double> y_col(100, 0.0);
+
+// Both use the same config - guaranteed identical inputs!
+double time_row = benchmark_gaxpy(gaxpy_row_oriented, config, y_row);
+double time_col = benchmark_gaxpy(gaxpy_column_oriented, config, y_col);
+```
+
 ### Gaxpy Implementations (gaxpy.cpp)
 
 #### Row-Oriented Gaxpy
@@ -176,27 +288,25 @@ for each column j:
 ```cpp
 double benchmark_gaxpy(
     void (*gaxpy_func)(const Matrix&, const std::vector<double>&, std::vector<double>&),
-    const Matrix& A,
-    const std::vector<double>& x,
-    std::vector<double>& y,
-    int iterations)
+    const BenchmarkConfig& config,
+    std::vector<double>& y)
 ```
 
 **Purpose:** Accurately measures the performance of a gaxpy implementation.
 
 **Parameters:**
 - `gaxpy_func`: Pointer to the gaxpy function to test
-- `A`: Input matrix
-- `x`: Input vector
-- `y`: Output vector (modified)
-- `iterations`: Number of times to run the operation for averaging
+- `config`: Shared test configuration (matrix A, vector x, iteration count)
+- `y`: Output vector (modified by the function)
 
 **Returns:** Average time per iteration in milliseconds
+
+**Design note:** By separating config (shared inputs) from y (per-test output), this design ensures all implementations are tested with identical inputs while allowing proper verification of each result.
 
 **Process:**
 1. Performs one warm-up run (to load caches, etc.)
 2. Resets output vector y to zero
-3. Runs the function `iterations` times while timing
+3. Runs the function `config.iterations` times while timing
 4. Returns average time per iteration
 
 ## Understanding the Output
@@ -227,6 +337,44 @@ Iterations: 100
 - **Small matrices (< ~2000×2000):** Column-oriented is FASTER (better register usage, sequential y access)
 - **Large matrices (> ~2000×2000):** Row-oriented is FASTER (better cache locality for A)
 - **Crossover point:** Depends on your CPU's cache size (typically L3 cache capacity)
+
+## Design: BenchmarkConfig Struct
+
+The framework uses a `BenchmarkConfig` struct to group shared test parameters:
+
+```cpp
+struct BenchmarkConfig {
+    const Matrix& A;
+    const std::vector<double>& x;
+    int iterations;
+};
+```
+
+**Why this design?**
+
+This separates **shared inputs** (same for all implementations) from **per-test outputs** (unique to each implementation):
+
+```cpp
+// Define shared inputs once
+BenchmarkConfig config = {A, x, 100};
+
+// Each implementation gets its own output vector
+std::vector<double> y_row(m, 0.0);
+std::vector<double> y_col(m, 0.0);
+std::vector<double> y_blocked(m, 0.0);
+
+// All use identical inputs - fair comparison guaranteed!
+double time_row = benchmark_gaxpy(gaxpy_row_oriented, config, y_row);
+double time_col = benchmark_gaxpy(gaxpy_column_oriented, config, y_col);
+double time_blocked = benchmark_gaxpy(gaxpy_blocked, config, y_blocked);
+```
+
+**Benefits:**
+- ✅ **DRY principle** - A, x, iterations defined once
+- ✅ **Error prevention** - Impossible to accidentally use different inputs
+- ✅ **Clear intent** - Explicit about what's shared vs. what's per-test
+- ✅ **Maintainable** - Adding shared parameters requires one change
+- ✅ **Readable** - Clean function calls without repetition
 
 ## The Cache Effect Crossover
 
@@ -320,25 +468,49 @@ void gaxpy_my_new_version(const Matrix& A,
 }
 ```
 
-### Step 3: Add benchmark in main.cpp
+### Step 3: Add tests to test_gaxpy.cpp
+
+```cpp
+// In test_implementation_equivalence(), add your new implementation:
+std::vector<double> y_new(m, 0.0);
+gaxpy_my_new_version(A, x, y_new);
+
+std::string msg = "My new version matches for " + std::to_string(m) + "x" + std::to_string(n);
+suite.assert_vectors_equal(y_new, y_row, 1e-10, msg);
+```
+
+### Step 4: Run tests to verify correctness
+
+```bash
+g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
+./test_gaxpy
+```
+
+### Step 5: Add benchmark in main.cpp
 
 ```cpp
 // In main(), inside the size loop, after existing benchmarks:
+
+// Create separate output vector for your new implementation
 std::vector<double> y_new(m, 0.0);
-double time_new = benchmark_gaxpy(gaxpy_my_new_version, A, x, y_new, iterations);
+
+// Benchmark using the shared config
+double time_new = benchmark_gaxpy(gaxpy_my_new_version, config, y_new);
 std::cout << "  My new version: " << std::setw(10) << time_new << " ms\n";
 
-// Verify correctness
+// Calculate speedup vs column-oriented
 double speedup_new = time_col / time_new;
 std::cout << "  Speedup (new vs col): " << std::setw(8) << speedup_new << "x\n";
 
-// Check against row-oriented implementation
+// Verify correctness against row-oriented implementation
 double max_diff_new = 0.0;
 for (int i = 0; i < m; i++) {
     max_diff_new = std::max(max_diff_new, std::abs(y_new[i] - y_row[i]));
 }
 std::cout << "  Max diff (new vs row): " << std::setw(10) << max_diff_new << "\n";
 ```
+
+**Key insight:** The `config` object is already defined in the loop and contains A, x, and iterations. All implementations share this same configuration, ensuring fair comparisons.
 
 ### Step 4: Recompile and run
 
@@ -415,13 +587,15 @@ g++ -std=c++17 -o gaxpy_test main.cpp gaxpy.cpp
 
 ## Common Pitfalls
 
+❌ **Not testing before benchmarking** → Fast but wrong implementation
+
 ❌ **Forgetting -O3 flag** → Results don't reflect optimized performance
 
 ❌ **Forgetting to recompile** → Testing old code after changes
 
 ❌ **Too few iterations** → Timing noise dominates measurement
 
-❌ **Not verifying correctness** → Fast but wrong implementation
+❌ **Not verifying correctness** → Even the benchmark can have subtle bugs
 
 ❌ **Testing only square matrices** → May miss performance characteristics
 
@@ -499,9 +673,18 @@ void gaxpy_blocked(const Matrix& A,
 
 **Add benchmark to main.cpp:**
 ```cpp
+// Create separate output vector
 std::vector<double> y_blocked(m, 0.0);
-double time_blocked = benchmark_gaxpy(gaxpy_blocked, A, x, y_blocked, iterations);
+
+// Benchmark using shared config
+double time_blocked = benchmark_gaxpy(gaxpy_blocked, config, y_blocked);
 std::cout << "  Blocked version: " << std::setw(10) << time_blocked << " ms\n";
+
+// Compare against other implementations
+double speedup_vs_row = time_row / time_blocked;
+double speedup_vs_col = time_col / time_blocked;
+std::cout << "  Speedup vs row: " << std::setw(8) << speedup_vs_row << "x\n";
+std::cout << "  Speedup vs col: " << std::setw(8) << speedup_vs_col << "x\n";
 ```
 
 **Goal:** Maintain good cache locality for matrices of any size by processing in blocks that fit in cache.
@@ -596,10 +779,19 @@ The winner depends on which factors dominate for your matrix size!
 
 1. **Write implementation** in `gaxpy.cpp`
 2. **Add declaration** in `gaxpy.h`
-3. **Add benchmark** in `main.cpp`
-4. **Compile:** `g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp`
-5. **Run:** `./gaxpy_test`
-6. **Analyze results** and iterate!
+3. **Add test** in `test_gaxpy.cpp` (in the `test_implementation_equivalence` function)
+4. **Compile and test:** `g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp && ./test_gaxpy`
+5. **If tests pass, add benchmark** in `main.cpp`:
+   ```cpp
+   std::vector<double> y_new(m, 0.0);
+   double time = benchmark_gaxpy(gaxpy_my_version, config, y_new);
+   ```
+6. **Compile and benchmark:** `g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp && ./gaxpy_test`
+7. **Analyze results** and iterate!
+
+**Golden rule:** Test for correctness first, then optimize for performance!
+
+**Key pattern:** The `config` object (containing A, x, iterations) is shared across all implementations. Each implementation gets its own output vector `y` for independent verification.
 
 ## Further Reading
 
@@ -610,10 +802,12 @@ The winner depends on which factors dominate for your matrix size!
 
 ## Key Takeaways
 
-1. **No algorithm is universally best** - performance depends on problem size and hardware
-2. **Cache capacity matters more than you think** - the crossover point reveals your cache size
-3. **Theory vs practice** - always benchmark! Intuition about "row-major" access can be misleading
-4. **Multiple factors interact** - matrix storage, vector access, register usage, and cache all matter
-5. **Real libraries use adaptive algorithms** - BLAS implementations choose strategies based on matrix size
+1. **Test first, optimize second** - correctness is non-negotiable; use the test suite before benchmarking
+2. **Separate shared inputs from per-test outputs** - the BenchmarkConfig pattern ensures fair comparisons
+3. **No algorithm is universally best** - performance depends on problem size and hardware
+4. **Cache capacity matters more than you think** - the crossover point reveals your cache size
+5. **Theory vs practice** - always benchmark! Intuition about "row-major" access can be misleading
+6. **Multiple factors interact** - matrix storage, vector access, register usage, and cache all matter
+7. **Real libraries use adaptive algorithms** - BLAS implementations choose strategies based on matrix size
 
 The goal of this framework is to help you develop intuition through experimentation. Happy benchmarking!
