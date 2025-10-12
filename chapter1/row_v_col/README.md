@@ -56,6 +56,24 @@ g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
 ./gaxpy_test
 ```
 
+**Sample output:**
+```
+Performance Comparison: Row-oriented vs Column-oriented
+====================================================
+
+Matrix size: 1000 x 1000
+Iterations: 100
+  Row-oriented:          1.0139 ms
+  Column-oriented:       0.6426 ms
+  Speedup (Row-oriented/Column-oriented):   1.5781x
+  Max difference:      0.0000 ✓
+```
+
+**Understanding speedup:**
+- Speedup < 1.0: First implementation is faster
+- Speedup > 1.0: Second implementation is faster
+- Speedup = 1.0: Both implementations have equal performance
+
 ## Testing for Correctness
 
 Before benchmarking, always verify your implementations are correct!
@@ -151,11 +169,12 @@ This file contains all gaxpy implementations. **This is where you'll spend most 
 
 This file contains:
 - **Timer class** for accurate measurements
-- **BenchmarkConfig struct** to group shared test parameters
-- **benchmark_gaxpy()** function for testing
-- **main()** function that runs all tests
+- **BenchmarkConfig struct** (defined in gaxpy.h) for grouping shared test parameters
+- **benchmark_gaxpy()** function for testing individual implementations
+- **compare_implementations()** function for side-by-side comparison of two implementations
+- **main()** function that orchestrates all tests
 
-**You edit this when:** Adding new benchmarks or changing test parameters
+**You edit this when:** Adding new comparison tests or changing test parameters
 
 ## Detailed Component Reference
 
@@ -292,7 +311,7 @@ double benchmark_gaxpy(
     std::vector<double>& y)
 ```
 
-**Purpose:** Accurately measures the performance of a gaxpy implementation.
+**Purpose:** Accurately measures the performance of a single gaxpy implementation.
 
 **Parameters:**
 - `gaxpy_func`: Pointer to the gaxpy function to test
@@ -309,29 +328,81 @@ double benchmark_gaxpy(
 3. Runs the function `config.iterations` times while timing
 4. Returns average time per iteration
 
+### Compare Implementations Function (main.cpp)
+
+```cpp
+void compare_implementations(
+    void (*gaxpy_func1)(const Matrix&, const std::vector<double>&, std::vector<double>&),
+    void (*gaxpy_func2)(const Matrix&, const std::vector<double>&, std::vector<double>&),
+    const std::string& name1,
+    const std::string& name2,
+    const std::vector<std::pair<int, int>>& sizes,
+    int iterations = 100)
+```
+
+**Purpose:** Compares two gaxpy implementations side-by-side across multiple matrix sizes.
+
+**Parameters:**
+- `gaxpy_func1`: First implementation to test
+- `gaxpy_func2`: Second implementation to test
+- `name1`: Display name for first implementation (e.g., "Row-oriented")
+- `name2`: Display name for second implementation (e.g., "Column-oriented")
+- `sizes`: Vector of (m, n) pairs representing matrix dimensions to test
+- `iterations`: Number of iterations for averaging (default: 100)
+
+**Returns:** Nothing (prints results to console)
+
+**What it does:**
+- Tests both implementations on each matrix size
+- Calculates speedup (time2 / time1)
+- Verifies results match between implementations
+- Provides clear, formatted output with warnings if results differ
+
+**Usage example:**
+```cpp
+std::vector<std::pair<int, int>> sizes = {{100, 100}, {1000, 1000}};
+
+compare_implementations(
+    gaxpy_row_oriented,
+    gaxpy_blocked,
+    "Row-oriented",
+    "Blocked",
+    sizes,
+    100
+);
+```
+
 ## Understanding the Output
 
+The `compare_implementations()` function produces clear, formatted output:
+
 ```
+Performance Comparison: Row-oriented vs Column-oriented
+====================================================
+
 Matrix size: 1000 x 1000
 Iterations: 100
-  Row-oriented:        1.0139 ms
-  Column-oriented:     0.6426 ms
-  Speedup (row/col):   0.6338x
-  Max difference:      0.0000
+  Row-oriented:          1.0139 ms
+  Column-oriented:       0.6426 ms
+  Speedup (Row-oriented/Column-oriented):   0.6338x
+  Max difference:      0.0000 ✓
 
 Matrix size: 5000 x 5000
 Iterations: 100
-  Row-oriented:       26.5430 ms
-  Column-oriented:    40.3988 ms
-  Speedup (row/col):   1.5220x
-  Max difference:      0.0000
+  Row-oriented:         26.5430 ms
+  Column-oriented:      40.3988 ms
+  Speedup (Row-oriented/Column-oriented):   1.5220x
+  Max difference:      0.0000 ✓
+
+Note: Speedup < 1.0 means first implementation is faster.
+      Speedup > 1.0 means second implementation is faster.
 ```
 
 **Interpretation:**
-- **Row-oriented time:** Average time for row-oriented implementation
-- **Column-oriented time:** Average time for column-oriented implementation  
-- **Speedup:** How many times faster row-oriented is than column-oriented (>1.0 means row is faster, <1.0 means column is faster)
+- **Implementation times:** Average time per iteration for each implementation
+- **Speedup:** Ratio of time2/time1 (values < 1.0 mean first is faster, > 1.0 mean second is faster)
 - **Max difference:** Maximum error between the two results (should be ~0)
+- **✓ or ⚠️:** Visual indicator of whether results match (⚠️ appears if difference > 1e-10)
 
 **Actual results show a crossover pattern:**
 - **Small matrices (< ~2000×2000):** Column-oriented is FASTER (better register usage, sequential y access)
@@ -486,31 +557,48 @@ g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
 ./test_gaxpy
 ```
 
-### Step 5: Add benchmark in main.cpp
+### Step 5: Compare against existing implementations in main.cpp
+
+The easiest way to benchmark your new implementation is to use the `compare_implementations()` function:
 
 ```cpp
-// In main(), inside the size loop, after existing benchmarks:
+// In main(), add a new comparison:
+std::vector<std::pair<int, int>> sizes = {
+    {100, 100}, {500, 500}, {1000, 1000}, {2000, 2000}, {5000, 5000}
+};
 
-// Create separate output vector for your new implementation
+// Compare your new version against row-oriented
+compare_implementations(
+    gaxpy_row_oriented,
+    gaxpy_my_new_version,
+    "Row-oriented",
+    "My New Version",
+    sizes,
+    100  // iterations
+);
+
+// Or compare against column-oriented
+compare_implementations(
+    gaxpy_column_oriented,
+    gaxpy_my_new_version,
+    "Column-oriented",
+    "My New Version",
+    sizes,
+    100
+);
+```
+
+**Alternative - Manual benchmarking** (if you need more control):
+```cpp
+// In main(), inside the size loop:
 std::vector<double> y_new(m, 0.0);
-
-// Benchmark using the shared config
 double time_new = benchmark_gaxpy(gaxpy_my_new_version, config, y_new);
 std::cout << "  My new version: " << std::setw(10) << time_new << " ms\n";
 
 // Calculate speedup vs column-oriented
 double speedup_new = time_col / time_new;
 std::cout << "  Speedup (new vs col): " << std::setw(8) << speedup_new << "x\n";
-
-// Verify correctness against row-oriented implementation
-double max_diff_new = 0.0;
-for (int i = 0; i < m; i++) {
-    max_diff_new = std::max(max_diff_new, std::abs(y_new[i] - y_row[i]));
-}
-std::cout << "  Max diff (new vs row): " << std::setw(10) << max_diff_new << "\n";
 ```
-
-**Key insight:** The `config` object is already defined in the loop and contains A, x, and iterations. All implementations share this same configuration, ensuring fair comparisons.
 
 ### Step 4: Recompile and run
 
@@ -521,7 +609,7 @@ g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
 
 ## Customization Options
 
-### Changing Test Sizes (main.cpp)
+### Changing Test Sizes
 
 Modify the `sizes` vector in `main()`:
 
@@ -532,26 +620,74 @@ std::vector<std::pair<int, int>> sizes = {
     {1000, 1000},  // Large
     {5000, 5000}   // Very large (requires more memory)
 };
+
+compare_implementations(
+    gaxpy_row_oriented,
+    gaxpy_column_oriented,
+    "Row-oriented",
+    "Column-oriented",
+    sizes,
+    100
+);
 ```
 
-### Changing Iteration Count (main.cpp)
+### Changing Iteration Count
 
 Adjust based on matrix size:
 
 ```cpp
-int iterations = 100;  // Good for medium sizes
-// For large matrices: iterations = 10;
-// For small matrices: iterations = 1000;
+// For small matrices: more iterations for accurate timing
+std::vector<std::pair<int, int>> small_sizes = {{100, 100}, {200, 200}};
+compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented,
+                       "Row", "Column", small_sizes, 1000);
+
+// For large matrices: fewer iterations (they take longer)
+std::vector<std::pair<int, int>> large_sizes = {{5000, 5000}, {10000, 10000}};
+compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented,
+                       "Row", "Column", large_sizes, 10);
 ```
 
-### Testing Non-Square Matrices (main.cpp)
+### Testing Non-Square Matrices
 
 ```cpp
-std::vector<std::pair<int, int>> sizes = {
+std::vector<std::pair<int, int>> rectangular = {
     {1000, 500},   // More rows than columns
     {500, 1000},   // More columns than rows
     {2000, 100}    // Very rectangular
 };
+
+compare_implementations(
+    gaxpy_row_oriented,
+    gaxpy_column_oriented,
+    "Row-oriented",
+    "Column-oriented",
+    rectangular,
+    100
+);
+```
+
+### Multiple Comparisons in One Run
+
+```cpp
+int main() {
+    std::vector<std::pair<int, int>> sizes = {
+        {100, 100}, {1000, 1000}, {5000, 5000}
+    };
+    
+    // Compare row vs column
+    compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented,
+                           "Row", "Column", sizes, 100);
+    
+    // Compare row vs blocked
+    compare_implementations(gaxpy_row_oriented, gaxpy_blocked,
+                           "Row", "Blocked", sizes, 100);
+    
+    // Compare column vs blocked
+    compare_implementations(gaxpy_column_oriented, gaxpy_blocked,
+                           "Column", "Blocked", sizes, 100);
+    
+    return 0;
+}
 ```
 
 ## Performance Tips
@@ -671,29 +807,40 @@ void gaxpy_blocked(const Matrix& A,
                    std::vector<double>& y);
 ```
 
-**Add benchmark to main.cpp:**
+**Add comparison to main.cpp:**
 ```cpp
-// Create separate output vector
-std::vector<double> y_blocked(m, 0.0);
+std::vector<std::pair<int, int>> sizes = {
+    {100, 100}, {500, 500}, {1000, 1000}, {2000, 2000}, {5000, 5000}
+};
 
-// Benchmark using shared config
-double time_blocked = benchmark_gaxpy(gaxpy_blocked, config, y_blocked);
-std::cout << "  Blocked version: " << std::setw(10) << time_blocked << " ms\n";
+// Compare blocked vs row-oriented
+compare_implementations(
+    gaxpy_row_oriented,
+    gaxpy_blocked,
+    "Row-oriented",
+    "Blocked",
+    sizes,
+    100
+);
 
-// Compare against other implementations
-double speedup_vs_row = time_row / time_blocked;
-double speedup_vs_col = time_col / time_blocked;
-std::cout << "  Speedup vs row: " << std::setw(8) << speedup_vs_row << "x\n";
-std::cout << "  Speedup vs col: " << std::setw(8) << speedup_vs_col << "x\n";
+// Compare blocked vs column-oriented
+compare_implementations(
+    gaxpy_column_oriented,
+    gaxpy_blocked,
+    "Column-oriented",
+    "Blocked",
+    sizes,
+    100
+);
 ```
 
 **Goal:** Maintain good cache locality for matrices of any size by processing in blocks that fit in cache.
 
 **Expected result:** 
-- Should match column-oriented for small matrices
+- Should match or beat column-oriented for small matrices
 - Should beat both versions for large matrices
 
-**Tuning:** Try different block sizes (16, 32, 64, 128) to find optimal value for your CPU.
+**Tuning:** Try different block sizes (16, 32, 64, 128) to find optimal value for your CPU. Simply change the `block_size` constant and recompile.
 
 ### Experiment 4: Unrolled Loops for Instruction-Level Parallelism
 
@@ -721,9 +868,82 @@ void gaxpy_unrolled(const Matrix& A,
 }
 ```
 
+**Add comparison to main.cpp:**
+```cpp
+compare_implementations(
+    gaxpy_row_oriented,
+    gaxpy_unrolled,
+    "Row-oriented",
+    "Unrolled",
+    sizes,
+    100
+);
+```
+
 **Goal:** Reduce loop overhead and enable instruction-level parallelism.
 
 **Expected result:** Most effective for small-to-medium matrices where instruction scheduling matters. May not help for very large matrices where memory bandwidth is the bottleneck.
+
+## Common Comparison Patterns
+
+The `compare_implementations()` function makes it trivial to test different scenarios:
+
+### Compare All Implementations Against a Baseline
+
+```cpp
+std::vector<std::pair<int, int>> sizes = {{100, 100}, {1000, 1000}, {5000, 5000}};
+
+// Use row-oriented as baseline
+compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented, 
+                       "Row-oriented", "Column-oriented", sizes, 100);
+compare_implementations(gaxpy_row_oriented, gaxpy_blocked, 
+                       "Row-oriented", "Blocked", sizes, 100);
+compare_implementations(gaxpy_row_oriented, gaxpy_unrolled, 
+                       "Row-oriented", "Unrolled", sizes, 100);
+```
+
+### Test Different Block Sizes
+
+```cpp
+// Create multiple blocked implementations with different block sizes
+void gaxpy_blocked_32(const Matrix& A, const std::vector<double>& x, std::vector<double>& y) {
+    // ... implementation with block_size = 32
+}
+
+void gaxpy_blocked_64(const Matrix& A, const std::vector<double>& x, std::vector<double>& y) {
+    // ... implementation with block_size = 64
+}
+
+// Compare them
+compare_implementations(gaxpy_blocked_32, gaxpy_blocked_64, 
+                       "Blocked-32", "Blocked-64", sizes, 100);
+```
+
+### Focus on Specific Size Ranges
+
+```cpp
+// Test small matrices only
+std::vector<std::pair<int, int>> small_sizes = {{50, 50}, {100, 100}, {200, 200}};
+compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented,
+                       "Row", "Column", small_sizes, 1000);  // More iterations
+
+// Test large matrices only  
+std::vector<std::pair<int, int>> large_sizes = {{5000, 5000}, {10000, 10000}};
+compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented,
+                       "Row", "Column", large_sizes, 10);  // Fewer iterations
+```
+
+### Test Rectangular Matrices
+
+```cpp
+std::vector<std::pair<int, int>> wide_matrices = {{100, 5000}, {200, 10000}};
+compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented,
+                       "Row", "Column", wide_matrices, 100);
+
+std::vector<std::pair<int, int>> tall_matrices = {{5000, 100}, {10000, 200}};
+compare_implementations(gaxpy_row_oriented, gaxpy_column_oriented,
+                       "Row", "Column", tall_matrices, 100);
+```
 
 ## Technical Background
 
@@ -781,17 +1001,23 @@ The winner depends on which factors dominate for your matrix size!
 2. **Add declaration** in `gaxpy.h`
 3. **Add test** in `test_gaxpy.cpp` (in the `test_implementation_equivalence` function)
 4. **Compile and test:** `g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp && ./test_gaxpy`
-5. **If tests pass, add benchmark** in `main.cpp`:
+5. **If tests pass, add comparison** in `main.cpp`:
    ```cpp
-   std::vector<double> y_new(m, 0.0);
-   double time = benchmark_gaxpy(gaxpy_my_version, config, y_new);
+   compare_implementations(
+       gaxpy_row_oriented,
+       gaxpy_my_version,
+       "Row-oriented",
+       "My Version",
+       sizes,
+       100
+   );
    ```
 6. **Compile and benchmark:** `g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp && ./gaxpy_test`
 7. **Analyze results** and iterate!
 
 **Golden rule:** Test for correctness first, then optimize for performance!
 
-**Key pattern:** The `config` object (containing A, x, iterations) is shared across all implementations. Each implementation gets its own output vector `y` for independent verification.
+**Key pattern:** Use `compare_implementations()` to easily compare any two implementations across multiple sizes with automatic verification.
 
 ## Further Reading
 
@@ -803,11 +1029,12 @@ The winner depends on which factors dominate for your matrix size!
 ## Key Takeaways
 
 1. **Test first, optimize second** - correctness is non-negotiable; use the test suite before benchmarking
-2. **Separate shared inputs from per-test outputs** - the BenchmarkConfig pattern ensures fair comparisons
-3. **No algorithm is universally best** - performance depends on problem size and hardware
-4. **Cache capacity matters more than you think** - the crossover point reveals your cache size
-5. **Theory vs practice** - always benchmark! Intuition about "row-major" access can be misleading
-6. **Multiple factors interact** - matrix storage, vector access, register usage, and cache all matter
-7. **Real libraries use adaptive algorithms** - BLAS implementations choose strategies based on matrix size
+2. **Use compare_implementations() for easy benchmarking** - comparing implementations is now just a few lines of code
+3. **Separate shared inputs from per-test outputs** - the BenchmarkConfig pattern ensures fair comparisons
+4. **No algorithm is universally best** - performance depends on problem size and hardware
+5. **Cache capacity matters more than you think** - the crossover point reveals your cache size
+6. **Theory vs practice** - always benchmark! Intuition about "row-major" access can be misleading
+7. **Multiple factors interact** - matrix storage, vector access, register usage, and cache all matter
+8. **Real libraries use adaptive algorithms** - BLAS implementations choose strategies based on matrix size
 
 The goal of this framework is to help you develop intuition through experimentation. Happy benchmarking!

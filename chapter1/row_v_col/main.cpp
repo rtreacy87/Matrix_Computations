@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include "gaxpy.h"
 
 // Simple timer class using high-resolution clock
@@ -44,20 +45,17 @@ double benchmark_gaxpy(void (*gaxpy_func)(const Matrix&, const std::vector<doubl
     return total_time / config.iterations;  // Average time per iteration
 }
 
-int main() {
-    // Test different matrix sizes
-    std::vector<std::pair<int, int>> sizes = {
-        {100, 100},
-        {500, 500},
-        {1000, 1000},
-        {2000, 2000},
-        {5000, 5000}
-    };
-    
-    int iterations = 100;  // Number of iterations for averaging
+// Compare two gaxpy implementations across multiple matrix sizes
+void compare_implementations(
+    void (*gaxpy_func1)(const Matrix&, const std::vector<double>&, std::vector<double>&),
+    void (*gaxpy_func2)(const Matrix&, const std::vector<double>&, std::vector<double>&),
+    const std::string& name1,
+    const std::string& name2,
+    const std::vector<std::pair<int, int>>& sizes,
+    int iterations = 100) {
     
     std::cout << std::fixed << std::setprecision(4);
-    std::cout << "Performance Comparison\n";
+    std::cout << "Performance Comparison: " << name1 << " vs " << name2 << "\n";
     std::cout << "====================================================\n\n";
     
     for (auto [m, n] : sizes) {
@@ -69,8 +67,6 @@ int main() {
         A.fill_random();
         
         std::vector<double> x(n);
-        std::vector<double> y_row(m, 0.0); 
-        std::vector<double> y_col(m, 0.0);
         
         // Fill x with random values
         std::random_device rd;
@@ -79,36 +75,78 @@ int main() {
         for (auto& val : x) {
             val = dis(gen);
         }
-
+        
+        // Create shared configuration
         BenchmarkConfig config = {A, x, iterations};
-
-        // Benchmark row-oriented
-        double time_row = benchmark_gaxpy(gaxpy_row_oriented, config, y_row);
         
-        // Benchmark column-oriented
-        double time_col = benchmark_gaxpy(gaxpy_column_oriented, config, y_col);
+        // Each implementation gets its own output vector
+        std::vector<double> y1(m, 0.0);
+        std::vector<double> y2(m, 0.0);
         
-        // Calculate speedup
-        double speedup = time_col / time_row;
+        // Benchmark first implementation
+        double time1 = benchmark_gaxpy(gaxpy_func1, config, y1);
         
-        std::cout << "  Row-oriented:    " << std::setw(10) << time_row << " ms\n";
-        std::cout << "  Column-oriented: " << std::setw(10) << time_col << " ms\n";
-        std::cout << "  Speedup (row/col): " << std::setw(8) << speedup << "x\n";
+        // Benchmark second implementation
+        double time2 = benchmark_gaxpy(gaxpy_func2, config, y2);
+        
+        // Calculate speedup (time2 / time1)
+        double speedup = time2 / time1;
+        
+        std::cout << "  " << std::left << std::setw(20) << (name1 + ":") 
+                  << std::right << std::setw(10) << time1 << " ms\n";
+        std::cout << "  " << std::left << std::setw(20) << (name2 + ":") 
+                  << std::right << std::setw(10) << time2 << " ms\n";
+        std::cout << "  Speedup (" << name1 << "/" << name2 << "): " 
+                  << std::setw(8) << speedup << "x\n";
         
         // Verify results match (within floating-point tolerance)
         double max_diff = 0.0;
         for (int i = 0; i < m; i++) {
-            max_diff = std::max(max_diff, std::abs(y_row[i] - y_col[i]));
+            max_diff = std::max(max_diff, std::abs(y1[i] - y2[i]));
         }
-        std::cout << "  Max difference:  " << std::setw(10) << max_diff << "\n";
-        std::cout << "\n";
+        std::cout << "  Max difference:  " << std::setw(10) << max_diff;
         
-        // Add benchmarks for your new implementations here!
-        // Example:
-        // std::vector<double> y_new(m, 0.0);
-        // double time_new = benchmark_gaxpy(gaxpy_blocked, A, x, y_new, iterations);
-        // std::cout << "  Blocked version: " << std::setw(10) << time_new << " ms\n";
+        if (max_diff > 1e-10) {
+            std::cout << " ⚠️  WARNING: Results differ!";
+        } else {
+            std::cout << " ✓";
+        }
+        std::cout << "\n\n";
     }
+}
+
+int main() {
+    // Define test sizes
+    std::vector<std::pair<int, int>> sizes = {
+        {100, 100},
+        {500, 500},
+        {1000, 1000},
+        {2000, 2000},
+        {5000, 5000}
+    };
+    
+    // Compare row-oriented vs column-oriented
+    compare_implementations(
+        gaxpy_row_oriented,
+        gaxpy_column_oriented,
+        "Row-oriented",
+        "Column-oriented",
+        sizes,
+        100  // iterations
+    );
+    
+    // Example: Add more comparisons easily!
+    // compare_implementations(
+    //     gaxpy_row_oriented,
+    //     gaxpy_blocked,
+    //     "Row-oriented",
+    //     "Blocked",
+    //     sizes,
+    //     100
+    // );
+    
+    std::cout << "\nNote: Speedup < 1.0 means " << "first implementation" << " is faster.\n";
+    std::cout << "      Speedup > 1.0 means " << "second implementation" << " is faster.\n";
     
     return 0;
 }
