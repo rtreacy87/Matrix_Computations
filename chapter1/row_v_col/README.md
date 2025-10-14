@@ -16,21 +16,53 @@ You'll discover that column-oriented code is often faster for small matrices, wh
 
 ## Project Structure
 
-The framework is split into four files for easy experimentation:
+The framework is split into six files for easy experimentation:
 
 ```
 your_project/
-├── gaxpy.h          # Matrix class and function declarations
+├── gaxpy.h          # Matrix class and gaxpy function declarations
 ├── gaxpy.cpp        # Your gaxpy implementations (add new ones here!)
-├── main.cpp         # Timer and benchmarking framework
+├── benchmark.h      # Benchmarking framework declarations
+├── benchmark.cpp    # Benchmarking framework implementation
+├── main.cpp         # Main program (orchestrates tests)
 └── test_gaxpy.cpp   # Test suite for correctness verification
 ```
 
 **Benefits of this structure:**
-- **gaxpy.cpp** contains only implementations - easy to add and modify
-- **main.cpp** contains the performance testing framework
+- **gaxpy.cpp** contains only algorithm implementations - easy to add and modify
+- **benchmark.cpp** contains performance testing framework - reusable across projects
+- **main.cpp** is minimal - just calls comparison functions
 - **test_gaxpy.cpp** contains correctness tests - run before benchmarking!
-- **gaxpy.h** defines the interface - add declarations when you add new implementations
+- **Headers (.h files)** define interfaces - clear separation of concerns
+
+## Design Philosophy: Modular Architecture
+
+The framework follows good software engineering principles:
+
+**Separation of Concerns:**
+- **Algorithm layer** (gaxpy.h/cpp) - Pure implementations, no timing code
+- **Benchmarking layer** (benchmark.h/cpp) - Reusable performance testing framework
+- **Application layer** (main.cpp) - Simple orchestration
+
+**Dependency Structure:**
+```
+main.cpp
+  ├─ includes benchmark.h
+  │    └─ includes gaxpy.h
+  └─ includes gaxpy.h
+
+test_gaxpy.cpp
+  └─ includes gaxpy.h
+```
+
+**Key insight:** `benchmark.h` depends on `gaxpy.h` (needs Matrix type), but `gaxpy.h` doesn't depend on `benchmark.h`. This one-way dependency makes the code modular and reusable.
+
+**Benefits:**
+- ✅ **Reusable benchmarking framework** - Can use benchmark.cpp with other matrix algorithms
+- ✅ **Clean algorithm code** - No timing logic mixed with implementations
+- ✅ **Easy testing** - Each component can be tested independently
+- ✅ **Maintainable** - Changes to benchmarking don't affect algorithms
+- ✅ **Minimal main()** - Application logic is simple and clear
 
 ## Quick Start
 
@@ -38,10 +70,10 @@ your_project/
 
 ```bash
 # Basic compilation
-g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp
+g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
 
 # With CPU-specific optimizations (recommended)
-g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
+g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
 ```
 
 **Compiler flags explained:**
@@ -49,6 +81,18 @@ g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
 - `-O3`: Maximum optimization level (critical for fair comparison)
 - `-march=native`: Optimize for your specific CPU architecture
 - `-o gaxpy_test`: Name the output executable
+
+**Note:** You must compile all three .cpp files together (main, gaxpy, and benchmark)
+
+**File compilation order doesn't matter:**
+```bash
+# All equivalent
+g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
+g++ -std=c++17 -O3 -o gaxpy_test gaxpy.cpp benchmark.cpp main.cpp
+g++ -std=c++17 -O3 -o gaxpy_test benchmark.cpp main.cpp gaxpy.cpp
+```
+
+The compiler figures out the dependencies from the `#include` statements in the headers.
 
 ### Running
 
@@ -87,6 +131,8 @@ g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
 # Run tests
 ./test_gaxpy
 ```
+
+**Note:** Tests only need gaxpy.cpp (no benchmark.cpp needed)
 
 **Expected output:**
 ```
@@ -150,7 +196,6 @@ g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
 
 This file contains:
 - **Matrix class definition** with row-major storage
-- **BenchmarkConfig struct** for grouping shared test parameters
 - **Function declarations** for all gaxpy implementations
 
 **You edit this when:** Adding a new gaxpy implementation (add its declaration)
@@ -165,16 +210,65 @@ This file contains all gaxpy implementations. **This is where you'll spend most 
 
 **You edit this when:** Adding or modifying gaxpy implementations
 
-### File: main.cpp (Testing Framework)
+### File: benchmark.h (Benchmarking Header)
 
 This file contains:
-- **Timer class** for accurate measurements
-- **BenchmarkConfig struct** (defined in gaxpy.h) for grouping shared test parameters
-- **benchmark_gaxpy()** function for testing individual implementations
-- **compare_implementations()** function for side-by-side comparison of two implementations
-- **main()** function that orchestrates all tests
+- **BenchmarkConfig struct** for grouping shared test parameters
+- **Timer class declaration** for accurate timing
+- **Function declarations** for benchmarking functions
 
-**You edit this when:** Adding new comparison tests or changing test parameters
+**You edit this when:** Rarely - only if adding new benchmarking features
+
+### File: benchmark.cpp (Benchmarking Implementation)
+
+This file contains:
+- **Timer class implementation** for accurate measurements
+- **benchmark_gaxpy()** function for testing individual implementations
+- **compare_implementations()** function for side-by-side comparison
+
+**You edit this when:** Rarely - only if modifying benchmarking behavior
+
+### File: main.cpp (Main Program)
+
+This file contains:
+- **main()** function that orchestrates all comparisons
+- Very simple - just calls `compare_implementations()`
+
+**You edit this when:** Adding new comparison tests or changing which implementations to compare
+
+**Example - the entire main.cpp is just:**
+```cpp
+#include <iostream>
+#include "gaxpy.h"
+#include "benchmark.h"
+
+int main() {
+    std::vector<std::pair<int, int>> sizes = {
+        {100, 100}, {1000, 1000}, {5000, 5000}
+    };
+    
+    compare_implementations(
+        gaxpy_row_oriented,
+        gaxpy_column_oriented,
+        "Row-oriented",
+        "Column-oriented",
+        sizes,
+        100
+    );
+    
+    return 0;
+}
+```
+
+**That's it!** All the timing, comparison, and verification logic is in benchmark.cpp.
+
+### File: test_gaxpy.cpp (Test Suite)
+
+This file contains:
+- Correctness tests for all implementations
+- Test harness with assertion framework
+
+**You edit this when:** Adding tests for new implementations
 
 ## Detailed Component Reference
 
@@ -200,7 +294,7 @@ class Matrix {
 
 **Why row-major?** C and C++ store multi-dimensional arrays in row-major order, meaning consecutive elements in a row are adjacent in memory.
 
-### Timer Class (main.cpp)
+### Timer Class (benchmark.h / benchmark.cpp)
 
 ```cpp
 class Timer {
@@ -224,7 +318,7 @@ double time = timer.elapsed_ms();
 std::cout << "Elapsed: " << time << " ms\n";
 ```
 
-### BenchmarkConfig Struct (gaxpy.h)
+### BenchmarkConfig Struct (benchmark.h)
 
 ```cpp
 struct BenchmarkConfig {
@@ -302,7 +396,7 @@ for each column j:
 
 **Best for:** Small matrices that fit in cache, or column-major storage (Fortran, MATLAB, Julia)
 
-### Benchmark Function (main.cpp)
+### Benchmark Function (benchmark.cpp)
 
 ```cpp
 double benchmark_gaxpy(
@@ -328,7 +422,7 @@ double benchmark_gaxpy(
 3. Runs the function `config.iterations` times while timing
 4. Returns average time per iteration
 
-### Compare Implementations Function (main.cpp)
+### Compare Implementations Function (benchmark.cpp)
 
 ```cpp
 void compare_implementations(
@@ -697,13 +791,13 @@ int main() {
 Always use `-O3` for benchmarking:
 ```bash
 # Good
-g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp
+g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
 
 # Better (CPU-specific optimizations)
-g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
+g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
 
 # Bad (no optimization - results meaningless)
-g++ -std=c++17 -o gaxpy_test main.cpp gaxpy.cpp
+g++ -std=c++17 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
 ```
 
 ### Fair Comparison
@@ -1012,7 +1106,7 @@ The winner depends on which factors dominate for your matrix size!
        100
    );
    ```
-6. **Compile and benchmark:** `g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp && ./gaxpy_test`
+6. **Compile and benchmark:** `g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp && ./gaxpy_test`
 7. **Analyze results** and iterate!
 
 **Golden rule:** Test for correctness first, then optimize for performance!
