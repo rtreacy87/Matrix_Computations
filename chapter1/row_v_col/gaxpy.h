@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <random>
-#include "matrix_utils.h"
+#include "../src/matrix_utils.h"
 
 
 

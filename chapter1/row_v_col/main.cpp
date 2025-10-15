@@ -1,6 +1,6 @@
 #include <iostream>
 #include "gaxpy.h"
-#include "benchmark.h"
+#include "../src/benchmark.h"
 
 int main() {
     // Define test sizes
