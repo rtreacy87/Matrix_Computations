@@ -3,32 +3,7 @@
 
 #include <vector>
 #include <random>
-
-// Matrix class with row-major storage (C++ default)
-class Matrix {
-public:
-    int m, n;
-    std::vector<double> data;
-    
-    Matrix(int rows, int cols) : m(rows), n(cols), data(rows * cols) {}
-    
-    double& operator()(int i, int j) {
-        return data[i * n + j];  // Row-major indexing
-    }
-    
-    const double& operator()(int i, int j) const {
-        return data[i * n + j];
-    }
-    
-    void fill_random() {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<> dis(-1.0, 1.0);
-        for (auto& val : data) {
-            val = dis(gen);
-        }
-    }
-};
+#include "matrix_utils.h"
 
 
 

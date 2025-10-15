@@ -1,9 +1,6 @@
 #include <iostream>
-#include <cmath>
 #include "gaxpy.h"
 #include "benchmark.h"
-
-
 
 int main() {
     // Define test sizes
@@ -35,8 +32,8 @@ int main() {
     //     100
     // );
     
-    std::cout << "\nNote: Speedup < 1.0 means " << "first implementation" << " is faster.\n";
-    std::cout << "      Speedup > 1.0 means " << "second implementation" << " is faster.\n";
+    std::cout << "\nNote: Speedup < 1.0 means first implementation is faster.\n";
+    std::cout << "      Speedup > 1.0 means second implementation is faster.\n";
     
     return 0;
 }

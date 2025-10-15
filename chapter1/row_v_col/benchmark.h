@@ -3,25 +3,8 @@
 
 #include <vector>
 #include <string>
-#include <chrono>
-#include "gaxpy.h"
+#include "matrix_utils.h"
 
-// Benchmark configuration - groups shared test parameters
-struct BenchmarkConfig {
-    const Matrix& A;
-    const std::vector<double>& x;
-    int iterations;
-};
-
-// Timer class for accurate performance measurements
-class Timer {
-private:
-    std::chrono::high_resolution_clock::time_point start_time;
-    
-public:
-    void start();
-    double elapsed_ms();
-};
 
 // Benchmark a single gaxpy implementation
 // Returns average time per iteration in milliseconds

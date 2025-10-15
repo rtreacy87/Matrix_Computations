@@ -1,20 +1,8 @@
 #include "benchmark.h"
+#include <iostream>
 #include <iomanip>
 #include <algorithm>
-#include <iostream>
-#include <string>
-
-
-// Timer class implementation
-void Timer::start() {
-    start_time = std::chrono::high_resolution_clock::now();
-}
-
-double Timer::elapsed_ms() {
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    return duration.count() / 1000.0;  // Convert to milliseconds
-}
+#include <random>
 
 // Test harness - measures performance of a gaxpy implementation
 double benchmark_gaxpy(void (*gaxpy_func)(const Matrix&, const std::vector<double>&, std::vector<double>&),
