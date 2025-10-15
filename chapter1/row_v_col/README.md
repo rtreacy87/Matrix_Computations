@@ -16,83 +16,131 @@ You'll discover that column-oriented code is often faster for small matrices, wh
 
 ## Project Structure
 
-The framework is split into six files for easy experimentation:
+The framework uses a two-tier structure separating reusable utilities from specific projects:
 
 ```
-your_project/
-├── gaxpy.h          # Matrix class and gaxpy function declarations
-├── gaxpy.cpp        # Your gaxpy implementations (add new ones here!)
-├── benchmark.h      # Benchmarking framework declarations
-├── benchmark.cpp    # Benchmarking framework implementation
-├── main.cpp         # Main program (orchestrates tests)
-└── test_gaxpy.cpp   # Test suite for correctness verification
+chapter1/
+├── src/                    # Reusable utilities (shared across projects)
+│   ├── matrix_utils.h      # Matrix, Timer, BenchmarkConfig (header-only)
+│   ├── benchmark.h         # Benchmarking framework declarations
+│   └── benchmark.cpp       # Benchmarking framework implementation
+│
+└── row_v_col/              # Specific project: row vs column gaxpy comparison
+    ├── gaxpy.h             # Project-specific function declarations
+    ├── gaxpy.cpp           # Project-specific implementations
+    ├── main.cpp            # Main program for this project
+    ├── test_gaxpy.cpp      # Test suite for this project
+    └── README.md           # Project documentation
 ```
 
 **Benefits of this structure:**
-- **gaxpy.cpp** contains only algorithm implementations - easy to add and modify
-- **benchmark.cpp** contains performance testing framework - reusable across projects
-- **main.cpp** is minimal - just calls comparison functions
-- **test_gaxpy.cpp** contains correctness tests - run before benchmarking!
-- **Headers (.h files)** define interfaces - clear separation of concerns
+- ✅ **Reusable code** - `src/` contains utilities used across multiple projects
+- ✅ **Clean separation** - Each project (like `row_v_col/`) is self-contained
+- ✅ **Easy to add projects** - Create new folders alongside `row_v_col/` that use `src/`
+- ✅ **Shared improvements** - Fix a bug in `benchmark.cpp`, all projects benefit
+- ✅ **Professional organization** - Mirrors real-world project structures
 
-## Design Philosophy: Modular Architecture
+## Design Philosophy: Two-Tier Architecture
 
-The framework follows good software engineering principles:
+The framework separates **reusable utilities** from **project-specific code**:
 
-**Separation of Concerns:**
-- **Algorithm layer** (gaxpy.h/cpp) - Pure implementations, no timing code
-- **Benchmarking layer** (benchmark.h/cpp) - Reusable performance testing framework
-- **Application layer** (main.cpp) - Simple orchestration
+### Reusable Layer (`src/`)
 
-**Dependency Structure:**
+**matrix_utils.h** - Header-only utility library
+- Matrix class with row-major storage
+- Timer class for accurate measurements
+- BenchmarkConfig struct for test parameters
+- No .cpp file needed (all implementations inline)
+
+**benchmark.h / benchmark.cpp** - Performance testing framework
+- `benchmark_gaxpy()` - Test individual implementations
+- `compare_implementations()` - Side-by-side comparisons
+- Can be reused across any matrix computation project
+
+**Why header-only for matrix_utils.h?**
+- Simple, short methods that can be inlined
+- Single-file include for convenience
+- No separate compilation needed
+- Perfect for utility classes
+
+### Project Layer (`row_v_col/`)
+
+**gaxpy.h / gaxpy.cpp** - Project-specific algorithms
+- Function declarations and implementations
+- Only contains gaxpy variants for this comparison
+
+**main.cpp** - Project entry point
+- Orchestrates comparisons specific to this project
+- Includes headers from both layers
+
+**test_gaxpy.cpp** - Project-specific tests
+- Correctness verification for gaxpy implementations
+
+### Dependency Structure
+
 ```
-main.cpp
-  ├─ includes benchmark.h
-  │    └─ includes gaxpy.h
+row_v_col/main.cpp
+  ├─ includes ../src/benchmark.h
+  │    └─ includes ../src/matrix_utils.h
   └─ includes gaxpy.h
+       └─ includes ../src/matrix_utils.h
 
-test_gaxpy.cpp
+row_v_col/test_gaxpy.cpp
   └─ includes gaxpy.h
+       └─ includes ../src/matrix_utils.h
 ```
-
-**Key insight:** `benchmark.h` depends on `gaxpy.h` (needs Matrix type), but `gaxpy.h` doesn't depend on `benchmark.h`. This one-way dependency makes the code modular and reusable.
 
 **Benefits:**
-- ✅ **Reusable benchmarking framework** - Can use benchmark.cpp with other matrix algorithms
-- ✅ **Clean algorithm code** - No timing logic mixed with implementations
-- ✅ **Easy testing** - Each component can be tested independently
-- ✅ **Maintainable** - Changes to benchmarking don't affect algorithms
-- ✅ **Minimal main()** - Application logic is simple and clear
+- ✅ **Reusable framework** - `src/` can be shared across multiple chapter projects
+- ✅ **Clean project code** - Each project folder is self-contained
+- ✅ **Easy scaling** - Add `chapter1/blocked_gaxpy/`, `chapter1/saxpy/`, etc.
+- ✅ **DRY principle** - Fix benchmark bugs once, all projects benefit
+- ✅ **Professional structure** - Mirrors real software engineering practices
 
 ## Quick Start
 
 ### Compilation
 
+Since the reusable utilities are in `../src/`, you need to specify the include path and source files:
+
 ```bash
+# From within the row_v_col/ directory:
+
 # Basic compilation
-g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
+g++ -std=c++17 -O3 -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
 
 # With CPU-specific optimizations (recommended)
-g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
+g++ -std=c++17 -O3 -march=native -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
 ```
 
 **Compiler flags explained:**
 - `-std=c++17`: Use C++17 standard features
 - `-O3`: Maximum optimization level (critical for fair comparison)
 - `-march=native`: Optimize for your specific CPU architecture
+- `-I../src`: Tell compiler to look for headers in the `../src/` directory
 - `-o gaxpy_test`: Name the output executable
 
-**Note:** You must compile all three .cpp files together (main, gaxpy, and benchmark)
+**Important notes:**
+- The `-I../src` flag allows your code to use `#include "matrix_utils.h"` and `#include "benchmark.h"`
+- You only need to compile `benchmark.cpp` (not `matrix_utils.h` since it's header-only)
+- Adjust paths if you're compiling from a different directory
+
+**Note:** You must compile with the `-I../src` flag and include `../src/benchmark.cpp`
+
+**From the `row_v_col/` directory:**
+```bash
+g++ -std=c++17 -O3 -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
+```
 
 **File compilation order doesn't matter:**
 ```bash
 # All equivalent
-g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
-g++ -std=c++17 -O3 -o gaxpy_test gaxpy.cpp benchmark.cpp main.cpp
-g++ -std=c++17 -O3 -o gaxpy_test benchmark.cpp main.cpp gaxpy.cpp
+g++ -std=c++17 -O3 -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
+g++ -std=c++17 -O3 -I../src -o gaxpy_test gaxpy.cpp ../src/benchmark.cpp main.cpp
+g++ -std=c++17 -O3 -I../src -o gaxpy_test ../src/benchmark.cpp main.cpp gaxpy.cpp
 ```
 
-The compiler figures out the dependencies from the `#include` statements in the headers.
+The `-I../src` flag tells the compiler to look in the `src/` directory when it sees `#include "matrix_utils.h"` or `#include "benchmark.h"`.
 
 ### Running
 
@@ -125,14 +173,16 @@ Before benchmarking, always verify your implementations are correct!
 ### Running the Test Suite
 
 ```bash
+# From the row_v_col/ directory:
+
 # Compile the test suite
-g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
+g++ -std=c++17 -O3 -I../src -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
 
 # Run tests
 ./test_gaxpy
 ```
 
-**Note:** Tests only need gaxpy.cpp (no benchmark.cpp needed)
+**Note:** Tests only need `gaxpy.cpp` (no `benchmark.cpp` needed). The `-I../src` flag allows test_gaxpy.cpp to include matrix_utils.h through gaxpy.h.
 
 **Expected output:**
 ```
@@ -192,15 +242,52 @@ g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp
 
 ## Framework Components
 
-### File: gaxpy.h (Header)
+### File: matrix_utils.h (in `src/`)
+
+**Location:** `../src/matrix_utils.h` (relative to project directory)
+
+**Header-only utility library** containing:
+- **Matrix class** - Row-major storage with operator() access
+- **Timer class** - High-resolution timing for benchmarks
+- **BenchmarkConfig struct** - Groups shared test parameters
+
+**You edit this when:** Rarely - only if adding new utility classes
+
+**Why header-only?** All methods are simple enough to inline. No .cpp file needed!
+
+### File: benchmark.h (in `src/`)
+
+**Location:** `../src/benchmark.h` (relative to project directory)
 
 This file contains:
-- **Matrix class definition** with row-major storage
-- **Function declarations** for all gaxpy implementations
+- **Function declarations** for benchmarking functions
+- Includes `matrix_utils.h` for Matrix, Timer, BenchmarkConfig
+
+**You edit this when:** Rarely - only if adding new benchmarking features
+
+### File: benchmark.cpp (in `src/`)
+
+**Location:** `../src/benchmark.cpp` (relative to project directory)
+
+This file contains:
+- **benchmark_gaxpy()** implementation - Tests individual implementations
+- **compare_implementations()** implementation - Side-by-side comparison
+
+**You edit this when:** Rarely - only if modifying benchmarking behavior
+
+### File: gaxpy.h (in `row_v_col/`)
+
+**Location:** In your project directory
+
+This file contains:
+- **Function declarations** for gaxpy implementations
+- Includes `matrix_utils.h` for Matrix type
 
 **You edit this when:** Adding a new gaxpy implementation (add its declaration)
 
-### File: gaxpy.cpp (Implementations)
+### File: gaxpy.cpp (in `row_v_col/`)
+
+**Location:** In your project directory
 
 This file contains all gaxpy implementations. **This is where you'll spend most of your time!**
 
@@ -210,25 +297,9 @@ This file contains all gaxpy implementations. **This is where you'll spend most 
 
 **You edit this when:** Adding or modifying gaxpy implementations
 
-### File: benchmark.h (Benchmarking Header)
+### File: main.cpp (in `row_v_col/`)
 
-This file contains:
-- **BenchmarkConfig struct** for grouping shared test parameters
-- **Timer class declaration** for accurate timing
-- **Function declarations** for benchmarking functions
-
-**You edit this when:** Rarely - only if adding new benchmarking features
-
-### File: benchmark.cpp (Benchmarking Implementation)
-
-This file contains:
-- **Timer class implementation** for accurate measurements
-- **benchmark_gaxpy()** function for testing individual implementations
-- **compare_implementations()** function for side-by-side comparison
-
-**You edit this when:** Rarely - only if modifying benchmarking behavior
-
-### File: main.cpp (Main Program)
+**Location:** In your project directory
 
 This file contains:
 - **main()** function that orchestrates all comparisons
@@ -260,9 +331,11 @@ int main() {
 }
 ```
 
-**That's it!** All the timing, comparison, and verification logic is in benchmark.cpp.
+**That's it!** All the timing, comparison, and verification logic is in `../src/benchmark.cpp`.
 
-### File: test_gaxpy.cpp (Test Suite)
+### File: test_gaxpy.cpp (in `row_v_col/`)
+
+**Location:** In your project directory
 
 This file contains:
 - Correctness tests for all implementations
@@ -285,6 +358,8 @@ class Matrix {
 };
 ```
 
+**Location:** Defined in `../src/matrix_utils.h`, included by `gaxpy.h`
+
 **Storage layout:** Element (i,j) is stored at index `i * n + j` in the data vector (row-major order).
 
 **Methods:**
@@ -294,7 +369,7 @@ class Matrix {
 
 **Why row-major?** C and C++ store multi-dimensional arrays in row-major order, meaning consecutive elements in a row are adjacent in memory.
 
-### Timer Class (benchmark.h / benchmark.cpp)
+### Timer Class (matrix_utils.h in `src/`)
 
 ```cpp
 class Timer {
@@ -302,6 +377,8 @@ class Timer {
     double elapsed_ms();
 };
 ```
+
+**Location:** Defined in `../src/matrix_utils.h`
 
 **Purpose:** Provides accurate timing using C++'s high-resolution clock.
 
@@ -318,7 +395,7 @@ double time = timer.elapsed_ms();
 std::cout << "Elapsed: " << time << " ms\n";
 ```
 
-### BenchmarkConfig Struct (benchmark.h)
+### BenchmarkConfig Struct (matrix_utils.h in `src/`)
 
 ```cpp
 struct BenchmarkConfig {
@@ -327,6 +404,8 @@ struct BenchmarkConfig {
     int iterations;
 };
 ```
+
+**Location:** Defined in `../src/matrix_utils.h`
 
 **Purpose:** Groups shared test parameters that remain constant across all implementations being compared.
 
@@ -788,16 +867,17 @@ int main() {
 
 ### Compiler Optimization
 
-Always use `-O3` for benchmarking:
+Always use `-O3` for benchmarking (commands from `row_v_col/` directory):
+
 ```bash
 # Good
-g++ -std=c++17 -O3 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
+g++ -std=c++17 -O3 -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
 
 # Better (CPU-specific optimizations)
-g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
+g++ -std=c++17 -O3 -march=native -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
 
 # Bad (no optimization - results meaningless)
-g++ -std=c++17 -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp
+g++ -std=c++17 -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
 ```
 
 ### Fair Comparison
@@ -1091,10 +1171,16 @@ The winner depends on which factors dominate for your matrix size!
 
 ## Workflow Summary
 
+**All commands assume you're in the `row_v_col/` directory:**
+
 1. **Write implementation** in `gaxpy.cpp`
 2. **Add declaration** in `gaxpy.h`
 3. **Add test** in `test_gaxpy.cpp` (in the `test_implementation_equivalence` function)
-4. **Compile and test:** `g++ -std=c++17 -O3 -o test_gaxpy test_gaxpy.cpp gaxpy.cpp && ./test_gaxpy`
+4. **Compile and test:** 
+   ```bash
+   g++ -std=c++17 -O3 -I../src -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
+   ./test_gaxpy
+   ```
 5. **If tests pass, add comparison** in `main.cpp`:
    ```cpp
    compare_implementations(
@@ -1106,12 +1192,87 @@ The winner depends on which factors dominate for your matrix size!
        100
    );
    ```
-6. **Compile and benchmark:** `g++ -std=c++17 -O3 -march=native -o gaxpy_test main.cpp gaxpy.cpp benchmark.cpp && ./gaxpy_test`
+6. **Compile and benchmark:** 
+   ```bash
+   g++ -std=c++17 -O3 -march=native -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
+   ./gaxpy_test
+   ```
 7. **Analyze results** and iterate!
 
 **Golden rule:** Test for correctness first, then optimize for performance!
 
 **Key pattern:** Use `compare_implementations()` to easily compare any two implementations across multiple sizes with automatic verification.
+
+**Remember:** The `-I../src` flag is crucial - it tells the compiler where to find the reusable utilities.
+
+## Creating New Projects
+
+The two-tier structure makes it easy to create new projects that reuse the benchmarking framework:
+
+### Example: Creating a Blocked Gaxpy Project
+
+```bash
+# From chapter1/ directory
+mkdir blocked_gaxpy
+cd blocked_gaxpy
+```
+
+**Create your project files:**
+
+**blocked_main.cpp:**
+```cpp
+#include <iostream>
+#include "gaxpy.h"
+#include "benchmark.h"
+
+int main() {
+    std::vector<std::pair<int, int>> sizes = {
+        {100, 100}, {1000, 1000}, {5000, 5000}
+    };
+    
+    compare_implementations(
+        gaxpy_row_oriented,
+        gaxpy_blocked_32,
+        "Row-oriented",
+        "Blocked-32",
+        sizes,
+        100
+    );
+    
+    return 0;
+}
+```
+
+**Compile:**
+```bash
+g++ -std=c++17 -O3 -march=native -I../src -o blocked_test blocked_main.cpp gaxpy.cpp ../src/benchmark.cpp
+```
+
+**Key insight:** You're reusing all of `src/` without copying any code! Any improvements to the benchmark framework benefit all projects.
+
+### Your chapter1/ Directory Now Looks Like:
+
+```
+chapter1/
+├── src/                    # Shared utilities
+│   ├── matrix_utils.h
+│   ├── benchmark.h
+│   └── benchmark.cpp
+│
+├── row_v_col/             # Project 1
+│   ├── gaxpy.h
+│   ├── gaxpy.cpp
+│   ├── main.cpp
+│   └── test_gaxpy.cpp
+│
+└── blocked_gaxpy/         # Project 2 (NEW!)
+    ├── gaxpy.h
+    ├── gaxpy.cpp
+    ├── blocked_main.cpp
+    └── test_blocked.cpp
+```
+
+Both projects share the same `src/` utilities!
 
 ## Further Reading
 
@@ -1123,12 +1284,46 @@ The winner depends on which factors dominate for your matrix size!
 ## Key Takeaways
 
 1. **Test first, optimize second** - correctness is non-negotiable; use the test suite before benchmarking
-2. **Use compare_implementations() for easy benchmarking** - comparing implementations is now just a few lines of code
-3. **Separate shared inputs from per-test outputs** - the BenchmarkConfig pattern ensures fair comparisons
-4. **No algorithm is universally best** - performance depends on problem size and hardware
-5. **Cache capacity matters more than you think** - the crossover point reveals your cache size
-6. **Theory vs practice** - always benchmark! Intuition about "row-major" access can be misleading
-7. **Multiple factors interact** - matrix storage, vector access, register usage, and cache all matter
-8. **Real libraries use adaptive algorithms** - BLAS implementations choose strategies based on matrix size
+2. **Two-tier architecture enables reuse** - Keep utilities in `src/`, projects in their own folders
+3. **Use compare_implementations() for easy benchmarking** - comparing implementations is now just a few lines of code
+4. **The -I../src flag is essential** - tells the compiler where to find reusable utilities
+5. **No algorithm is universally best** - performance depends on problem size and hardware
+6. **Cache capacity matters more than you think** - the crossover point reveals your cache size
+7. **Theory vs practice** - always benchmark! Intuition about "row-major" access can be misleading
+8. **Multiple factors interact** - matrix storage, vector access, register usage, and cache all matter
+9. **Real libraries use adaptive algorithms** - BLAS implementations choose strategies based on matrix size
 
 The goal of this framework is to help you develop intuition through experimentation. Happy benchmarking!
+
+## Quick Reference
+
+### Essential Commands (from `row_v_col/` directory)
+
+**Compile tests:**
+```bash
+g++ -std=c++17 -O3 -I../src -o test_gaxpy test_gaxpy.cpp gaxpy.cpp
+```
+
+**Run tests:**
+```bash
+./test_gaxpy
+```
+
+**Compile benchmarks:**
+```bash
+g++ -std=c++17 -O3 -march=native -I../src -o gaxpy_test main.cpp gaxpy.cpp ../src/benchmark.cpp
+```
+
+**Run benchmarks:**
+```bash
+./gaxpy_test
+```
+
+### Key Points to Remember
+
+- ✅ Always use `-I../src` to find the reusable utilities
+- ✅ Include `../src/benchmark.cpp` when compiling benchmarks
+- ✅ Tests don't need `benchmark.cpp`
+- ✅ All three utilities (Matrix, Timer, BenchmarkConfig) are in `matrix_utils.h`
+- ✅ `matrix_utils.h` is header-only (no .cpp file to compile)
+- ✅ New projects can reuse `src/` without copying code
