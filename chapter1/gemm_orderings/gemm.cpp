@@ -14,13 +14,21 @@
 // Middle loop (j): processes columns of B
 // Outer loop (i): processes rows of A
 // ============================================================================
+void gemm_ijk_inner_loop(const Matrix& A, const Matrix& B, Matrix& C, int i, int j) {
+    for (int k = 0; k < A.n; k++) {  // A.n = B.m = r
+        C(i, j) += A(i, k) * B(k, j);
+    }
+}
+
+void gemm_ijk_second_inner_loop(const Matrix& A, const Matrix& B, Matrix& C, int i){
+    for (int j = 0; j < B.n; j++) {
+         gemm_ijk_inner_loop(A, B, C, i, j);
+    }
+}
+
 void gemm_ijk(const Matrix& A, const Matrix& B, Matrix& C) {
     for (int i = 0; i < A.m; i++) {
-        for (int j = 0; j < B.n; j++) {
-            for (int k = 0; k < A.n; k++) {  // A.n = B.m = r
-                C(i, j) += A(i, k) * B(k, j);
-            }
-        }
+        gemm_ijk_second_inner_loop(A, B, C, i);
     }
 }
 
@@ -37,13 +45,22 @@ void gemm_ijk(const Matrix& A, const Matrix& B, Matrix& C) {
 // Middle loop (i): processes rows of A
 // Outer loop (j): processes columns of B
 // ============================================================================
+
+void gemm_jik_inner_loop(const Matrix& A, const Matrix& B, Matrix& C, int j, int i) {
+    for (int k = 0; k < A.n; k++) {
+        C(i, j) += A(i, k) * B(k, j);
+    }
+}
+
+void gemm_jik_middle_loop(const Matrix& A, const Matrix& B, Matrix& C, int j) {
+    for (int i = 0; i < A.m; i++) {
+        gemm_jik_inner_loop(A, B, C, j, i);
+    }
+}
+
 void gemm_jik(const Matrix& A, const Matrix& B, Matrix& C) {
     for (int j = 0; j < B.n; j++) {
-        for (int i = 0; i < A.m; i++) {
-            for (int k = 0; k < A.n; k++) {
-                C(i, j) += A(i, k) * B(k, j);
-            }
-        }
+        gemm_jik_middle_loop(A, B, C, j);
     }
 }
 
@@ -62,13 +79,23 @@ void gemm_jik(const Matrix& A, const Matrix& B, Matrix& C) {
 //
 // EXPECTED: BEST performance for C++ (all row-major access)
 // ============================================================================
+void gemm_ikj_inner_loop(const Matrix& A, const Matrix& B, Matrix& C, int i, int k) {
+    for (int j = 0; j < B.n; j++) {
+        C(i, j) += A(i, k) * B(k, j);
+    }
+}
+
+// Middle: Process all k for row i
+void gemm_ikj_middle_loop(const Matrix& A, const Matrix& B, Matrix& C, int i) {
+    for (int k = 0; k < A.n; k++) {
+        gemm_ikj_inner_loop(A, B, C, i, k);
+    }
+}
+
+// Outer: Process all rows
 void gemm_ikj(const Matrix& A, const Matrix& B, Matrix& C) {
     for (int i = 0; i < A.m; i++) {
-        for (int k = 0; k < A.n; k++) {
-            for (int j = 0; j < B.n; j++) {
-                C(i, j) += A(i, k) * B(k, j);
-            }
-        }
+        gemm_ikj_middle_loop(A, B, C, i);
     }
 }
 
@@ -88,13 +115,23 @@ void gemm_ikj(const Matrix& A, const Matrix& B, Matrix& C) {
 // EXPECTED: WORST performance for C++ (all column-major access)
 // EXPECTED: BEST performance for Fortran (column-major storage)
 // ============================================================================
+void gemm_jki_inner_loop(const Matrix& A, const Matrix& B, Matrix& C, int j, int k) {
+    for (int i = 0; i < A.m; i++) {
+        C(i, j) += A(i, k) * B(k, j);
+    }
+}
+
+// Middle: Process all k for column j
+void gemm_jki_middle_loop(const Matrix& A, const Matrix& B, Matrix& C, int j) {
+    for (int k = 0; k < A.n; k++) {
+        gemm_jki_inner_loop(A, B, C, j, k);
+    }
+}
+
+// Outer: Process all columns
 void gemm_jki(const Matrix& A, const Matrix& B, Matrix& C) {
     for (int j = 0; j < B.n; j++) {
-        for (int k = 0; k < A.n; k++) {
-            for (int i = 0; i < A.m; i++) {
-                C(i, j) += A(i, k) * B(k, j);
-            }
-        }
+        gemm_jki_middle_loop(A, B, C, j);
     }
 }
 
@@ -113,13 +150,23 @@ void gemm_jki(const Matrix& A, const Matrix& B, Matrix& C) {
 //
 // EXPECTED: GOOD performance for C++ (mostly row-major access)
 // ============================================================================
+void gemm_kij_inner_loop(const Matrix& A, const Matrix& B, Matrix& C, int k, int i) {
+    for (int j = 0; j < B.n; j++) {
+        C(i, j) += A(i, k) * B(k, j);
+    }
+}
+
+// Middle: Process all rows for rank-1 update k
+void gemm_kij_middle_loop(const Matrix& A, const Matrix& B, Matrix& C, int k) {
+    for (int i = 0; i < A.m; i++) {
+        gemm_kij_inner_loop(A, B, C, k, i);
+    }
+}
+
+// Outer: Process all rank-1 updates
 void gemm_kij(const Matrix& A, const Matrix& B, Matrix& C) {
     for (int k = 0; k < A.n; k++) {
-        for (int i = 0; i < A.m; i++) {
-            for (int j = 0; j < B.n; j++) {
-                C(i, j) += A(i, k) * B(k, j);
-            }
-        }
+        gemm_kij_middle_loop(A, B, C, k);
     }
 }
 
@@ -138,12 +185,22 @@ void gemm_kij(const Matrix& A, const Matrix& B, Matrix& C) {
 //
 // EXPECTED: POOR performance for C++ (column-major access)
 // ============================================================================
+void gemm_kji_inner_loop(const Matrix& A, const Matrix& B, Matrix& C, int k, int j) {
+    for (int i = 0; i < A.m; i++) {
+        C(i, j) += A(i, k) * B(k, j);
+    }
+}
+
+// Middle: Process all columns for rank-1 update k
+void gemm_kji_middle_loop(const Matrix& A, const Matrix& B, Matrix& C, int k) {
+    for (int j = 0; j < B.n; j++) {
+        gemm_kji_inner_loop(A, B, C, k, j);
+    }
+}
+
+// Outer: Process all rank-1 updates
 void gemm_kji(const Matrix& A, const Matrix& B, Matrix& C) {
     for (int k = 0; k < A.n; k++) {
-        for (int j = 0; j < B.n; j++) {
-            for (int i = 0; i < A.m; i++) {
-                C(i, j) += A(i, k) * B(k, j);
-            }
-        }
+        gemm_kji_middle_loop(A, B, C, k);
     }
 }
